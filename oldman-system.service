@@ -1,0 +1,19 @@
+[Unit]
+Description=Oldman System Streamlit App
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/oldman_system
+Environment=PATH=/root/miniconda3/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/root/miniconda3/bin/streamlit run app.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=oldman-system
+
+[Install]
+WantedBy=multi-user.target
