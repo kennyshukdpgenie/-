@@ -1,9 +1,14 @@
 import streamlit as st
 import pandas as pd
-from fake_data import (
+from database import (
+    get_service_users_translated, get_service_providers_translated, get_service_logs_translated,
+    get_family_accounts_translated, get_admin_accounts_translated, get_provider_accounts_translated,
     get_service_users, get_service_providers, get_service_logs,
-    get_family_accounts, get_admin_accounts, get_provider_accounts,
-    add_service_log
+    get_family_accounts_from_users, get_admin_accounts, get_provider_accounts_from_providers,
+    add_service_log, delete_service_user, delete_service_provider, 
+    delete_service_log, update_service_user, update_service_provider,
+    add_service_user, add_service_provider, get_service_types,
+    add_service_type, delete_service_type
 )
 import os
 from datetime import datetime
@@ -158,32 +163,32 @@ st.markdown(
         border-color: #b22222 !important;
     }
     
-    /* 隐藏文件上传器的英文文本 */
-    .stFileUploader p, .stFileUploader span, .stFileUploader div[data-testid="stFileUploader"] p {
-        display: none !important;
-    }
-    .stFileUploader button {
+    /* 隐藏所有文件上传器的英文文本 */
+    .stFileUploader p, .stFileUploader span, .stFileUploader div[data-testid="stFileUploader"] p,
+    .stFileUploader small, .stFileUploader label, .stFileUploader button {
         display: none !important;
     }
     
-    /* 隐藏所有英文错误消息和警告 */
+    /* 隐藏所有Streamlit英文提示和警告 */
     .stAlert, .stAlert p, .stAlert span {
         font-family: "Microsoft YaHei", "SimHei", Arial, sans-serif !important;
     }
-    /* 隐藏Streamlit的英文警告和错误消息 */
-    .stAlert[data-testid="stAlert"] p:contains("deprecated"),
-    .stAlert[data-testid="stAlert"] p:contains("removed"),
-    .stAlert[data-testid="stAlert"] p:contains("future release"),
-    .stAlert[data-testid="stAlert"] p:contains("utilize"),
-    .stAlert[data-testid="stAlert"] p:contains("parameter") {
+    
+    /* 隐藏所有可能包含英文的元素 */
+    [data-testid="stFileUploaderDropzone"] p,
+    [data-testid="stFileUploaderDropzone"] span,
+    [data-testid="stFileUploaderDropzone"] small,
+    [data-testid="stFileUploaderDropzone"] label {
         display: none !important;
     }
-    /* 隐藏所有包含英文的警告框 */
-    .stAlert:has(p:contains("deprecated")),
-    .stAlert:has(p:contains("removed")),
-    .stAlert:has(p:contains("future release")),
-    .stAlert:has(p:contains("utilize")),
-    .stAlert:has(p:contains("parameter")) {
+    
+    /* 隐藏默认的拖拽提示 */
+    .uploadedFile, .uploadedFileName {
+        font-family: "Microsoft YaHei", "SimHei", Arial, sans-serif !important;
+    }
+    
+    /* 隐藏所有可能的英文错误消息 */
+    .stException, .stException p, .stException span {
         display: none !important;
     }
     
@@ -362,12 +367,77 @@ def app_header():
         unsafe_allow_html=True
     )
 
-def login():
+def entry_page():
+    """入口页面 - 显示三个用户类型选择按钮"""
     app_header()
-    st.title("登录")
+    st.title("智守护")
     
-    # 移动端友好的登录表单
-    login_type = st.selectbox("选择登录类型", ["服务人员", "家属", "管理员"])
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 三个用户类型选择按钮
+    st.markdown("""
+    <style>
+    .user-type-button {
+        background-color: #8B4513 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 25px !important;
+        padding: 20px 40px !important;
+        font-size: 20px !important;
+        font-weight: bold !important;
+        margin: 15px 0 !important;
+        width: 100% !important;
+        min-height: 60px !important;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+    }
+    .user-type-button:hover {
+        background-color: #A0522D !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 15px rgba(139, 69, 19, 0.3) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # 服务人员按钮
+    if st.button("服务人员", key="service_staff", use_container_width=True):
+        st.session_state['selected_user_type'] = 'provider'
+        st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 长者家属按钮
+    if st.button("长者家属", key="family_member", use_container_width=True):
+        st.session_state['selected_user_type'] = 'family'
+        st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 管理人员按钮
+    if st.button("管理人员", key="admin_staff", use_container_width=True):
+        st.session_state['selected_user_type'] = 'admin'
+        st.rerun()
+
+def login():
+    """登录页面 - 根据选择的用户类型显示对应登录界面"""
+    app_header()
+    
+    user_type = st.session_state.get('selected_user_type', None)
+    
+    if user_type == 'provider':
+        st.title("服务人员登录")
+        login_type_text = "服务人员"
+    elif user_type == 'family':
+        st.title("长者家属登录")
+        login_type_text = "家属"
+    elif user_type == 'admin':
+        st.title("管理人员登录")
+        login_type_text = "管理员"
+    else:
+        # 如果没有选择用户类型，返回入口页面
+        entry_page()
+        return
+    
     username = st.text_input("用户名", placeholder="请输入用户名")
     password = st.text_input("密码", type="password", placeholder="请输入密码")
 
@@ -375,8 +445,8 @@ def login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("登录", use_container_width=True):
-            if login_type == "服务人员":
-                provider_accounts = get_provider_accounts()
+            if user_type == 'provider':
+                provider_accounts = get_provider_accounts_from_providers()
                 user = provider_accounts[(provider_accounts['username'] == username) & (provider_accounts['password'] == password)]
                 if not user.empty:
                     st.session_state['logged_in'] = True
@@ -385,8 +455,8 @@ def login():
                     st.rerun()
                 else:
                     st.error("用户名或密码错误")
-            elif login_type == "家属":
-                family_accounts = get_family_accounts()
+            elif user_type == 'family':
+                family_accounts = get_family_accounts_from_users()
                 user = family_accounts[(family_accounts['username'] == username) & (family_accounts['password'] == password)]
                 if not user.empty:
                     st.session_state['logged_in'] = True
@@ -395,7 +465,7 @@ def login():
                     st.rerun()
                 else:
                     st.error("用户名或密码错误")
-            elif login_type == "管理员":
+            elif user_type == 'admin':
                 admin_accounts = get_admin_accounts()
                 user = admin_accounts[(admin_accounts['username'] == username) & (admin_accounts['password'] == password)]
                 if not user.empty:
@@ -405,13 +475,21 @@ def login():
                     st.rerun()
                 else:
                     st.error("用户名或密码错误")
+    
+    # 返回按钮
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("返回选择用户类型", use_container_width=True):
+        st.session_state.pop('selected_user_type', None)
+        st.rerun()
 
 def provider_upload():
     app_header()
     st.title("上传服务记录")
     provider_id = st.session_state['user_id']
     service_users = get_service_users()
-    assigned_users = service_users[service_users['assigned_provider_id'] == provider_id]
+    # For now, show all users since there's no assigned_provider_id relationship
+    # In a real system, you might want to create a separate assignment table
+    assigned_users = service_users.copy()
     
     if assigned_users.empty:
         st.warning("您没有分配的服务对象。")
@@ -424,23 +502,32 @@ def provider_upload():
     # 移动端友好的表单布局
     service_type = st.selectbox("服务类型", ["理发", "医疗", "血压检测", "家政服务", "其他"])
     duration = st.selectbox("服务时长", ["30分钟", "40分钟", "一小时", "两小时", "半天", "全天"])
-    notes = st.text_area("服务内容", placeholder="请详细描述服务内容...", height=120)
     
     st.markdown("**上传服务照片**")
     
-    # 自定义上传按钮 - 使用Streamlit的原生文件上传器但隐藏默认UI
+    # 直接显示文件上传器
     uploaded_image = st.file_uploader(
-        "点击选择照片", 
+        "选择照片文件", 
         type=['jpg', 'png', 'jpeg'], 
         label_visibility="collapsed",
         key="service_photo_upload"
     )
     
+    # 图片大小验证
+    if uploaded_image is not None:
+        # 检查文件大小 (5MB = 5 * 1024 * 1024 bytes)
+        max_size = 5 * 1024 * 1024  # 5MB in bytes
+        if uploaded_image.size > max_size:
+            st.error(f"图片文件过大！最大允许 5MB，当前文件大小: {uploaded_image.size / (1024*1024):.1f}MB")
+            uploaded_image = None
+        else:
+            st.success(f"图片文件大小: {uploaded_image.size / (1024*1024):.1f}MB ✓")
+    
     # 隐藏默认上传区域的英文文本，但保留功能
     st.markdown('''
         <style>
-        /* 隐藏文件上传器的英文文本，但保留上传功能 */
-        .stFileUploader p, .stFileUploader span {
+        /* 隐藏文件上传器的所有英文文本 */
+        .stFileUploader p, .stFileUploader span, .stFileUploader small {
             display: none !important;
         }
         /* 自定义上传按钮样式 */
@@ -457,29 +544,22 @@ def provider_upload():
             border-color: #d32f2f !important;
             background: #f8f6f2 !important;
         }
-        /* 隐藏默认的"Browse files"按钮 */
-        .stFileUploader button {
+        /* 隐藏所有默认按钮和文本 */
+        .stFileUploader button, .stFileUploader label {
             display: none !important;
         }
         /* 添加自定义中文提示 */
         .stFileUploader > div::before {
-            content: "点击上传服务照片" !important;
+            content: "点击选择照片文件" !important;
             display: block !important;
             font-size: 16px !important;
             color: #b22222 !important;
             font-weight: bold !important;
             margin-bottom: 8px !important;
         }
-        .stFileUploader > div::after {
-            content: "支持 JPG, PNG, JPEG 格式 • 限制200MB" !important;
-            display: block !important;
-            font-size: 14px !important;
-            color: #666 !important;
-            margin-top: 8px !important;
-        }
         </style>
     ''', unsafe_allow_html=True)
-
+    
     # 图片预览
     if uploaded_image is not None:
         st.markdown("**已选择的照片预览：**")
@@ -488,28 +568,91 @@ def provider_upload():
     # 全宽提交按钮
     if st.button("提交服务记录", use_container_width=True):
         if selected_user_id and service_type and duration:
-            image_path = None
-            if uploaded_image is not None:
-                if not os.path.exists('static/uploads'):
-                    os.makedirs('static/uploads')
-                image_path = os.path.join('static/uploads', uploaded_image.name)
-                with open(image_path, "wb") as f:
-                    f.write(uploaded_image.getbuffer())
-                # 用于显示，使用 '@/uploads/filename'
-                display_image_path = f"@/uploads/{uploaded_image.name}"
-            else:
-                # 如果没有上传图片，使用默认测试图片
-                display_image_path = "@/uploads/test.jpeg"
-            new_log = {
-                'provider_id': provider_id,
-                'user_id': selected_user_id,
-                'service_type': service_type,
-                'duration': duration,
-                'notes': notes,
-                'image_path': display_image_path
-            }
-            add_service_log(new_log)
-            st.success("服务记录上传成功！")
+            try:
+                # Get provider and user names from their respective tables
+                from database import get_service_providers
+                providers_df = get_service_providers()
+                provider_name = providers_df[providers_df['id'] == provider_id]['name'].iloc[0]
+                user_name = assigned_users[assigned_users['id'] == selected_user_id]['name'].iloc[0]
+                
+                # Convert numpy types to Python types for MySQL compatibility
+                provider_id_int = int(provider_id)
+                selected_user_id_int = int(selected_user_id)
+                
+                # Handle image upload - store directly in database
+                image_data = None
+                if uploaded_image is not None:
+                    # Read image data as bytes for LONGBLOB storage
+                    image_data = uploaded_image.getbuffer().tobytes()
+                    st.info(f"图片已读取，大小: {len(image_data)} bytes")
+                else:
+                    st.info("未上传图片")
+                
+                new_log = {
+                    'provider_id': provider_id_int,
+                    'provider_name': provider_name,
+                    'user_name': user_name,
+                    'user_id': selected_user_id_int,
+                    'service_type': service_type,
+                    'duration': duration,
+                    'image_data': image_data
+                }
+                
+                # Debug: Print the data being sent to database
+                st.info(f"调试信息 - 准备保存到数据库:")
+                st.info(f"provider_id: {provider_id_int} (类型: {type(provider_id_int)})")
+                st.info(f"user_id: {selected_user_id_int} (类型: {type(selected_user_id_int)})")
+                st.info(f"provider_name: {provider_name}")
+                st.info(f"user_name: {user_name}")
+                
+                # Add service log to database
+                if add_service_log(new_log):
+                    # Success popup message
+                    st.success("🎉 服务记录上传成功！")
+                    
+                    # Create a success card with all details
+                    st.markdown("""
+                    <div style="
+                        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+                        border: 2px solid #28a745;
+                        border-radius: 10px;
+                        padding: 20px;
+                        margin: 20px 0;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    ">
+                        <h3 style="color: #155724; margin-top: 0;">✅ 上传成功确认</h3>
+                        <div style="color: #155724;">
+                            <p><strong>📋 服务记录已保存到数据库</strong></p>
+                            <p><strong>👨‍⚕️ 服务人员:</strong> {}</p>
+                            <p><strong>👴 服务对象:</strong> {}</p>
+                            <p><strong>🔧 服务类型:</strong> {}</p>
+                            <p><strong>⏱️ 服务时长:</strong> {}</p>
+                            <p><strong>📸 照片状态:</strong> {}</p>
+                        </div>
+                    </div>
+                    """.format(
+                        provider_name,
+                        user_name,
+                        service_type,
+                        duration,
+                        "✅ 已保存到数据库" if image_data else "❌ 未上传照片"
+                    ), unsafe_allow_html=True)
+                    
+                    # Additional success information
+                    if image_data:
+                        st.info(f"📸 照片已成功保存到数据库，文件大小: {len(image_data)} bytes")
+                    
+                    st.balloons()  # Add celebration effect
+                    
+                    # Wait a moment then refresh
+                    import time
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error("❌ 保存服务记录失败，请重试")
+            except Exception as e:
+                st.error(f"上传过程中发生错误: {str(e)}")
+                st.error("请检查所有字段是否正确填写")
         else:
             st.error("请选择服务对象、服务类型和服务时长。")
 
@@ -517,30 +660,37 @@ def provider_history():
     app_header()
     st.title("历史服务记录")
     provider_id = st.session_state['user_id']
-    service_logs = get_service_logs()
-    provider_logs = service_logs[service_logs['provider_id'] == provider_id].copy()
+    # Get data with English column names for operations
+    service_logs_raw = get_service_logs()
+    # Get data with Chinese column names for display
+    service_logs_display = get_service_logs_translated()
+    
+    provider_logs_raw = service_logs_raw[service_logs_raw['provider_id'] == provider_id].copy()
+    provider_logs_display = service_logs_display[service_logs_display['服务人员ID'] == provider_id].copy()
 
-    if provider_logs.empty:
+    if provider_logs_raw.empty:
         st.info("您还没有服务记录。")
     else:
         # 移动端友好的服务记录卡片布局
-        for idx, row in provider_logs.iterrows():
+        for idx, row in provider_logs_display.iterrows():
+            # Get corresponding raw data row for image data access
+            raw_row = provider_logs_raw.iloc[idx]
+            
             with st.container():
                 st.markdown(
                     f"""
                     <div class="service-card">
-                        <h4>服务记录 #{row['id']}</h4>
-                        <p><strong>时间:</strong> {row['time']}</p>
-                        <p><strong>服务类型:</strong> {row['service_type']}</p>
-                        <p><strong>服务时长:</strong> {row['duration']}</p>
-                        <p><strong>服务内容:</strong> {row['notes']}</p>
+                        <h4>服务记录 #{idx + 1}</h4>
+                        <p><strong>用户:</strong> {row['用户姓名']}</p>
+                        <p><strong>时间:</strong> {row['时间']}</p>
+                        <p><strong>服务:</strong> {row['服务类型']} : {row['服务时长']}</p>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
                 
-                # 移动端优化的图片显示
-                if row['image_path']:
+                # 移动端优化的图片显示 - 从数据库读取图片数据
+                if 'image_data' in raw_row and raw_row['image_data'] is not None:
                     col1, col2 = st.columns([1, 1])
                     with col1:
                         if st.button("查看服务照片", key=f"view_img_{idx}", use_container_width=True):
@@ -549,17 +699,21 @@ def provider_history():
                     # 直接显示图片，不使用popover（移动端更友好）
                     if st.session_state.get(f'popup_img_{idx}', False):
                         st.markdown("**服务照片：**")
-                        img_path = row['image_path']
-                        if img_path.startswith('@/uploads/'):
-                            img_file = img_path.replace('@/uploads/', 'static/uploads/')
-                        else:
-                            img_file = img_path
-                        
-                        if os.path.exists(img_file):
-                            st.image(img_file, use_container_width=True, caption=f"服务记录 #{row['id']} 的照片")
-                        else:
-                            st.warning("图片文件不存在")
-                            st.info(f"图片路径: {img_file}")
+                        try:
+                            # Convert bytes to image and display
+                            import io
+                            from PIL import Image
+                            image_bytes = raw_row['image_data']
+                            if image_bytes:
+                                image = Image.open(io.BytesIO(image_bytes))
+                                st.image(image, use_container_width=True, caption=f"服务记录 #{idx + 1} 的照片")
+                            else:
+                                st.warning("图片数据为空")
+                        except Exception as e:
+                            st.error(f"图片显示错误: {str(e)}")
+                            st.info("图片数据可能已损坏")
+                else:
+                    st.info("此服务记录没有照片")
                 
                 st.markdown("---")
 
@@ -567,30 +721,36 @@ def family_view():
     app_header()
     st.title("查看服务记录")
     user_id = st.session_state['user_id']
-    service_logs = get_service_logs()
-    user_logs = service_logs[service_logs['user_id'] == user_id]
+    # Get data with English column names for operations
+    service_logs_raw = get_service_logs()
+    # Get data with Chinese column names for display
+    service_logs_display = get_service_logs_translated()
+    
+    user_logs_raw = service_logs_raw[service_logs_raw['user_id'] == user_id].copy()
+    user_logs_display = service_logs_display[service_logs_display['用户ID'] == user_id].copy()
 
-    if user_logs.empty:
+    if user_logs_raw.empty:
         st.info("目前没有服务记录。")
     else:
         # 移动端友好的卡片布局
-        for index, row in user_logs.iterrows():
+        for index, row in user_logs_display.iterrows():
+            # Get corresponding raw data row for image data access
+            raw_row = user_logs_raw.iloc[index]
+            
             with st.container():
                 st.markdown(
                     f"""
                     <div class="service-card">
-                        <h4>服务时间: {row['time']}</h4>
-                        <p><strong>服务类型:</strong> {row['service_type']}</p>
-                        <p><strong>服务时长:</strong> {row['duration']}</p>
-                        <p><strong>服务内容:</strong> {row['notes']}</p>
+                        <h4>服务时间: {row['时间']}</h4>
+                        <p><strong>服务人员:</strong> {row['服务人员姓名']}</p>
+                        <p><strong>服务:</strong> {row['服务类型']} : {row['服务时长']}</p>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
                 
-                # 显示图片（如果有）
-                img_path = row.get('image_path', None)
-                if img_path:
+                # 显示图片（如果有）- 从数据库读取图片数据
+                if 'image_data' in raw_row and raw_row['image_data'] is not None:
                     col1, col2 = st.columns([1, 1])
                     with col1:
                         if st.button("查看服务照片", key=f"family_view_img_{index}", use_container_width=True):
@@ -599,55 +759,66 @@ def family_view():
                     # 直接显示图片，不使用popover（移动端更友好）
                     if st.session_state.get(f'family_popup_img_{index}', False):
                         st.markdown("**服务照片：**")
-                        if img_path.startswith('@/uploads/'):
-                            img_file = img_path.replace('@/uploads/', 'static/uploads/')
-                        else:
-                            img_file = img_path
-                        
-                        if os.path.exists(img_file):
-                            st.image(img_file, use_container_width=True, caption=f"服务时间: {row['time']} 的照片")
-                        else:
-                            st.warning("图片文件不存在")
-                            st.info(f"图片路径: {img_file}")
+                        try:
+                            # Convert bytes to image and display
+                            import io
+                            from PIL import Image
+                            image_bytes = raw_row['image_data']
+                            if image_bytes:
+                                image = Image.open(io.BytesIO(image_bytes))
+                                st.image(image, use_container_width=True, caption=f"服务时间: {row['时间']} 的照片")
+                            else:
+                                st.warning("图片数据为空")
+                        except Exception as e:
+                            st.error(f"图片显示错误: {str(e)}")
+                            st.info("图片数据可能已损坏")
+                else:
+                    st.info("此服务记录没有照片")
                 st.markdown("---")
 
-def admin_dashboard():
+def admin_service_records():
+    """查询服务记录"""
     app_header()
-    st.title("管理端-全局信息")
-
-    st.subheader("服务人员信息")
-    providers_df = get_service_providers()
-    st.dataframe(providers_df, use_container_width=True)
-
-    st.subheader("被服务人员信息")
-    users_df = get_service_users()
-    st.dataframe(users_df, use_container_width=True)
-
-    st.subheader("所有服务记录")
-    service_logs = get_service_logs().copy()
-    if service_logs.empty:
+    st.title("查询服务记录")
+    
+    # Get data with English column names for operations
+    service_logs_raw = get_service_logs().copy()
+    # Get data with Chinese column names for display
+    service_logs_display = get_service_logs_translated().copy()
+    
+    if service_logs_raw.empty:
         st.info("暂无服务记录。")
     else:
         # 移动端友好的服务记录显示
-        for idx, row in service_logs.iterrows():
+        for idx, row in service_logs_display.iterrows():
+            raw_row = service_logs_raw.iloc[idx]  # Get corresponding raw data row
+            
             with st.container():
                 st.markdown(
                     f"""
                     <div class="service-card">
-                        <h4>服务记录 #{row['id']}</h4>
-                        <p><strong>服务人员ID:</strong> {row['provider_id']}</p>
-                        <p><strong>用户ID:</strong> {row['user_id']}</p>
-                        <p><strong>时间:</strong> {row['time']}</p>
-                        <p><strong>服务类型:</strong> {row['service_type']}</p>
-                        <p><strong>服务时长:</strong> {row['duration']}</p>
-                        <p><strong>服务内容:</strong> {row['notes']}</p>
+                        <h4>服务记录 #{idx + 1}</h4>
+                        <p><strong>服务人员:</strong> {row['服务人员姓名']}</p>
+                        <p><strong>用户:</strong> {row['用户姓名']}</p>
+                        <p><strong>时间:</strong> {row['时间']}</p>
+                        <p><strong>服务:</strong> {row['服务类型']} : {row['服务时长']}</p>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
                 
-                # 图片显示
-                if row['image_path']:
+                # Delete button
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    if st.button("删除记录", key=f"del_log_{idx}", use_container_width=True):
+                        if delete_service_log(raw_row['provider_id'], raw_row['user_id'], raw_row['time']):
+                            st.success("记录删除成功")
+                            st.rerun()
+                        else:
+                            st.error("删除失败")
+                
+                # 图片显示 - 从数据库读取图片数据
+                if 'image_data' in raw_row and raw_row['image_data'] is not None:
                     col1, col2 = st.columns([1, 1])
                     with col1:
                         if st.button("查看服务照片", key=f"admin_view_img_{idx}", use_container_width=True):
@@ -656,19 +827,357 @@ def admin_dashboard():
                     # 直接显示图片，不使用popover（移动端更友好）
                     if st.session_state.get(f'admin_popup_img_{idx}', False):
                         st.markdown("**服务照片：**")
-                        img_path = row['image_path']
-                        if img_path.startswith('@/uploads/'):
-                            img_file = img_path.replace('@/uploads/', 'static/uploads/')
-                        else:
-                            img_file = img_path
-                        
-                        if os.path.exists(img_file):
-                            st.image(img_file, use_container_width=True, caption=f"服务记录 #{row['id']} 的照片")
-                        else:
-                            st.warning("图片文件不存在")
-                            st.info(f"图片路径: {img_file}")
+                        try:
+                            # Convert bytes to image and display
+                            import io
+                            from PIL import Image
+                            image_bytes = raw_row['image_data']
+                            if image_bytes:
+                                image = Image.open(io.BytesIO(image_bytes))
+                                st.image(image, use_container_width=True, caption=f"服务记录 #{idx + 1} 的照片")
+                            else:
+                                st.warning("图片数据为空")
+                        except Exception as e:
+                            st.error(f"图片显示错误: {str(e)}")
+                            st.info("图片数据可能已损坏")
+                else:
+                    st.info("此服务记录没有照片")
                 
                 st.markdown("---")
+    
+    # 返回主菜单按钮
+    st.markdown("---")
+    if st.button("返回主菜单", use_container_width=True):
+        st.session_state['admin_function'] = None
+        st.rerun()
+
+def admin_elderly_management():
+    """长者信息管理"""
+    app_header()
+    st.title("长者信息管理")
+    
+    # Get data with English column names for operations
+    users_df_raw = get_service_users()
+    # Get data with Chinese column names for display
+    users_df_display = get_service_users_translated()
+    
+    st.subheader("长者信息列表")
+    
+    # Display users with delete and edit options
+    if not users_df_display.empty:
+        for idx, row in users_df_display.iterrows():
+            raw_row = users_df_raw.iloc[idx]  # Get corresponding raw data row
+            
+            with st.container():
+                col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                with col1:
+                    st.text(f"姓名: {row['姓名']}")
+                    st.text(f"地址: {row['地址']}")
+                    st.text(f"家属用户名: {row['家属用户名']}")
+                with col2:
+                    if st.button("编辑", key=f"edit_user_{idx}", use_container_width=True):
+                        st.session_state[f'editing_user_{idx}'] = True
+                with col3:
+                    if st.button("删除", key=f"del_user_{idx}", use_container_width=True):
+                        if delete_service_user(raw_row['id']):
+                            st.success(f"已删除长者：{row['姓名']}")
+                            st.rerun()
+                        else:
+                            st.error("删除失败")
+                
+                # Edit form
+                if st.session_state.get(f'editing_user_{idx}', False):
+                    st.markdown("---")
+                    st.subheader(f"编辑长者：{row['姓名']}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        edit_name = st.text_input("姓名", value=row['姓名'], key=f"edit_name_{idx}")
+                        edit_address = st.text_input("地址", value=row['地址'], key=f"edit_address_{idx}")
+                    with col2:
+                        edit_guardian_user = st.text_input("家属用户名", value=row['家属用户名'], key=f"edit_guardian_user_{idx}")
+                        edit_guardian_pwd = st.text_input("家属密码", value=row['家属密码'], key=f"edit_guardian_pwd_{idx}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("保存", key=f"save_user_{idx}", use_container_width=True):
+                            user_data = {
+                                'name': edit_name,
+                                'address': edit_address,
+                                'guardian_user': edit_guardian_user,
+                                'guardian_pwd': edit_guardian_pwd
+                            }
+                            if update_service_user(raw_row['id'], user_data):
+                                st.success("更新成功")
+                                st.session_state[f'editing_user_{idx}'] = False
+                                st.rerun()
+                            else:
+                                st.error("更新失败")
+                    with col2:
+                        if st.button("取消", key=f"cancel_user_{idx}", use_container_width=True):
+                            st.session_state[f'editing_user_{idx}'] = False
+                            st.rerun()
+                
+                st.markdown("---")
+    else:
+        st.info("暂无长者信息")
+    
+    st.subheader("添加新长者")
+    col1, col2 = st.columns(2)
+    with col1:
+        new_name = st.text_input("姓名", key="new_user_name")
+        new_address = st.text_input("地址", key="new_user_address")
+    with col2:
+        new_guardian_user = st.text_input("家属用户名", key="new_guardian_user")
+        new_guardian_pwd = st.text_input("家属密码", type="password", key="new_guardian_pwd")
+    
+    if st.button("添加长者", use_container_width=True):
+        if new_name and new_address and new_guardian_user and new_guardian_pwd:
+            user_data = {
+                'name': new_name,
+                'address': new_address,
+                'guardian_user': new_guardian_user,
+                'guardian_pwd': new_guardian_pwd
+            }
+            if add_service_user(user_data):
+                st.success(f"已添加长者：{new_name}")
+                st.rerun()
+            else:
+                st.error("添加失败")
+        else:
+            st.error("请填写所有必填字段：姓名、地址、家属用户名、家属密码")
+    
+    # 返回主菜单按钮
+    st.markdown("---")
+    if st.button("返回主菜单", use_container_width=True):
+        st.session_state['admin_function'] = None
+        st.rerun()
+
+def admin_staff_management():
+    """服务人员信息管理"""
+    app_header()
+    st.title("服务人员信息管理")
+    
+    # Get data with English column names for operations
+    providers_df_raw = get_service_providers()
+    # Get data with Chinese column names for display
+    providers_df_display = get_service_providers_translated()
+    
+    st.subheader("服务人员列表")
+    
+    # Display providers with delete and edit options
+    if not providers_df_display.empty:
+        for idx, row in providers_df_display.iterrows():
+            raw_row = providers_df_raw.iloc[idx]  # Get corresponding raw data row
+            
+            with st.container():
+                col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                with col1:
+                    st.text(f"姓名: {row['姓名']}")
+                    st.text(f"电话: {row['联系电话']}")
+                    st.text(f"服务类型: {row['服务类型']}")
+                    st.text(f"用户名: {row['用户名']}")
+                with col2:
+                    if st.button("编辑", key=f"edit_provider_{idx}", use_container_width=True):
+                        st.session_state[f'editing_provider_{idx}'] = True
+                with col3:
+                    if st.button("删除", key=f"del_provider_{idx}", use_container_width=True):
+                        if delete_service_provider(raw_row['id']):
+                            st.success(f"已删除服务人员：{row['姓名']}")
+                            st.rerun()
+                        else:
+                            st.error("删除失败")
+                
+                # Edit form
+                if st.session_state.get(f'editing_provider_{idx}', False):
+                    st.markdown("---")
+                    st.subheader(f"编辑服务人员：{row['姓名']}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        edit_name = st.text_input("姓名", value=row['姓名'], key=f"edit_provider_name_{idx}")
+                        edit_phone = st.text_input("联系电话", value=row['联系电话'], key=f"edit_provider_phone_{idx}")
+                        # Get service types for dropdown
+                        service_types = get_service_types()
+                        current_role_index = service_types.index(row['服务类型']) if row['服务类型'] in service_types else 0
+                        edit_role = st.selectbox("服务类型", options=service_types, index=current_role_index, key=f"edit_provider_role_{idx}")
+                    with col2:
+                        edit_username = st.text_input("用户名", value=row['用户名'], key=f"edit_provider_username_{idx}")
+                        edit_password = st.text_input("密码", value=row['密码'], type="password", key=f"edit_provider_password_{idx}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("保存", key=f"save_provider_{idx}", use_container_width=True):
+                            provider_data = {
+                                'name': edit_name,
+                                'phone': edit_phone,
+                                'role': edit_role,
+                                'username': edit_username,
+                                'password': edit_password
+                            }
+                            if update_service_provider(raw_row['id'], provider_data):
+                                st.success("更新成功")
+                                st.session_state[f'editing_provider_{idx}'] = False
+                                st.rerun()
+                            else:
+                                st.error("更新失败")
+                    with col2:
+                        if st.button("取消", key=f"cancel_provider_{idx}", use_container_width=True):
+                            st.session_state[f'editing_provider_{idx}'] = False
+                            st.rerun()
+                
+                st.markdown("---")
+    else:
+        st.info("暂无服务人员信息")
+    
+    st.subheader("添加新服务人员")
+    col1, col2 = st.columns(2)
+    with col1:
+        new_name = st.text_input("姓名", key="new_provider_name")
+        new_phone = st.text_input("联系电话", key="new_provider_phone")
+        # Get service types for dropdown
+        service_types = get_service_types()
+        new_role = st.selectbox("服务类型", options=service_types, key="new_provider_role")
+    with col2:
+        new_username = st.text_input("用户名", key="new_provider_username")
+        new_password = st.text_input("密码", type="password", key="new_provider_password")
+    
+    if st.button("添加服务人员", use_container_width=True):
+        if new_name and new_phone and new_username and new_password:
+            provider_data = {
+                'name': new_name,
+                'phone': new_phone,
+                'role': new_role,
+                'username': new_username,
+                'password': new_password
+            }
+            if add_service_provider(provider_data):
+                st.success(f"已添加服务人员：{new_name}")
+                st.rerun()
+            else:
+                st.error("添加失败")
+        else:
+            st.error("请填写所有必填字段：姓名、联系电话、用户名、密码")
+    
+    # 返回主菜单按钮
+    st.markdown("---")
+    if st.button("返回主菜单", use_container_width=True):
+        st.session_state['admin_function'] = None
+        st.rerun()
+
+def admin_service_config():
+    """服务类型配置"""
+    app_header()
+    st.title("服务类型配置")
+    
+    st.subheader("当前服务类型")
+    current_services = get_service_types()
+    
+    if current_services:
+        # Use enumerate to create unique keys and avoid duplicates
+        for idx, service in enumerate(current_services):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.text(service)
+            with col2:
+                if st.button("删除", key=f"del_service_{idx}_{service}"):
+                    if delete_service_type(service):
+                        st.success(f"已删除服务类型：{service}")
+                        st.rerun()
+                    else:
+                        st.error("删除失败")
+    else:
+        st.info("暂无服务类型")
+    
+    st.subheader("添加新服务类型")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        new_service = st.text_input("新服务类型名称", key="new_service_type", placeholder="请输入服务类型名称")
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("添加服务类型", key="add_service_type", use_container_width=True):
+            if new_service and new_service.strip():
+                # Check if service type already exists
+                if new_service.strip() in current_services:
+                    st.error("该服务类型已存在")
+                else:
+                    if add_service_type(new_service.strip()):
+                        st.success(f"已添加服务类型：{new_service}")
+                        st.rerun()
+                    else:
+                        st.error("添加失败")
+            else:
+                st.error("请输入服务类型名称")
+    
+    st.subheader("服务时长配置")
+    current_durations = ["30分钟", "40分钟", "一小时", "两小时", "半天", "全天"]
+    
+    for idx, duration in enumerate(current_durations):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.text(duration)
+        with col2:
+            if st.button("删除", key=f"del_dur_{idx}_{duration}"):
+                st.warning(f"删除时长选项：{duration}")
+                # Note: Duration options are hardcoded for now
+    
+    # 返回主菜单按钮
+    st.markdown("---")
+    if st.button("返回主菜单", use_container_width=True):
+        st.session_state['admin_function'] = None
+        st.rerun()
+
+def admin_dashboard():
+    """管理员主界面 - 显示4个选项"""
+    app_header()
+    st.title("管理员控制台")
+    
+    # 检查是否已选择管理功能
+    if 'admin_function' not in st.session_state:
+        st.session_state['admin_function'] = None
+    
+    admin_function = st.session_state.get('admin_function', None)
+    
+    if admin_function is None:
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 四个管理选项按钮
+        if st.button("查询服务记录", key="admin_service_records", use_container_width=True):
+            st.session_state['admin_function'] = 'service_records'
+            st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("长者信息管理", key="admin_elderly_mgmt", use_container_width=True):
+            st.session_state['admin_function'] = 'elderly_management'
+            st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("服务人员信息管理", key="admin_staff_mgmt", use_container_width=True):
+            st.session_state['admin_function'] = 'staff_management'
+            st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("服务类型配置", key="admin_service_config", use_container_width=True):
+            st.session_state['admin_function'] = 'service_config'
+            st.rerun()
+    
+    else:
+        # 显示对应的管理功能
+        if admin_function == 'service_records':
+            admin_service_records()
+        elif admin_function == 'elderly_management':
+            admin_elderly_management()
+        elif admin_function == 'staff_management':
+            admin_staff_management()
+        elif admin_function == 'service_config':
+            admin_service_config()
+        
+        # 返回主菜单按钮
+        st.markdown("---")
+        if st.button("返回主菜单", key="admin_return_main", use_container_width=True):
+            st.session_state['admin_function'] = None
+            st.rerun()
 
 def mobile_navigation():
     """移动端底部导航栏"""
@@ -689,7 +1198,11 @@ def main():
         st.session_state['logged_in'] = False
 
     if not st.session_state['logged_in']:
-        login()
+        # 检查是否已选择用户类型
+        if 'selected_user_type' not in st.session_state:
+            entry_page()
+        else:
+            login()
     else:
         user_type = st.session_state['user_type']
         
@@ -711,6 +1224,8 @@ def main():
             st.session_state['logged_in'] = False
             st.session_state.pop('user_type', None)
             st.session_state.pop('user_id', None)
+            st.session_state.pop('selected_user_type', None)
+            st.session_state.pop('admin_function', None)
             st.rerun()
 
 if __name__ == "__main__":
